@@ -14,7 +14,7 @@ echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
 sudo cat > ~/nginx.conf <<EOL
 user nginx;
 worker_processes auto;
-#include /usr/share/nginx/modules/*.conf;
+include /usr/share/nginx/modules/*.conf;
 events { }
 http {
 
@@ -42,9 +42,9 @@ http {
         auth_basic "";
         auth_basic_user_file /etc/nginx/.htpasswd;
 
-         Certificate
+         # Certificate
          ssl_certificate /etc/ssl/certs/nginx.crt;
-         Private Key
+         # Private Key
          ssl_certificate_key /etc/ssl/certs/nginx.key;    
 
          ssl on;
