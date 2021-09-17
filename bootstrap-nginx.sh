@@ -10,6 +10,10 @@ sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/certs/
 # Generate a dummy password
 echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
 
+## Starting Nginx Services
+sudo chkconfig nginx on
+sudo service nginx start
+
 ## Modifying Nginx Server Configuration
 cat > /tmp/nginx.conf <<EOL
 user nginx;
@@ -67,10 +71,6 @@ http {
 }
 EOL
 
-sudo cp ~/nginx.conf /etc/nginx/nginx.conf
+sudo cp /tmp/nginx.conf /etc/nginx/nginx.conf
 
-
-## Starting Nginx Services
-sudo chkconfig nginx on
-sudo service nginx start
 sudo service nginx restart
