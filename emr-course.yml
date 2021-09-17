@@ -1,0 +1,106 @@
+Description: >-
+  CloudFormation template to create Amazon EMR cluster 
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Amazon EMR Cluster Configuration
+        Parameters:
+          - ReleaseLabel
+          - InstanceType
+          - VPCPublicSubnet
+          - EC2KeyPair
+    ParameterLabels:
+      ReleaseLabel:
+        default: EMR Release Label
+      VPCPublicSubnet:
+        default: VPC Public Subnet
+      EC2KeyPair:
+        default: EC2 Key Pair
+
+
+Parameters:
+  EC2KeyPair:
+    Description: Amazon EC2 Key Pair
+    Type: AWS::EC2::KeyPair::KeyName
+
+  ReleaseLabel:
+    Type: String
+    Default: "emr-6.2.0"
+    AllowedValues:
+    - "emr-6.2.0"
+    - "emr-5.32.0"
+    Description: Amazon EMR Version
+  VPCPublicSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: >-
+      Public Subnet to be used for Amazon EMR cluster, please choose either
+      LF-Workshop-PublicSubnetOne or LF-Workshop-PublicSubnetTwo
+    AllowedPattern: .+
+  InstanceType:
+    Type: String
+    Default: m5.xlarge
+    AllowedValues:
+    - m5.xlarge
+    - m6g.xlarge
+    Description: Amazon EMR Cluster Instance Type
+Resources:
+
+  EMRCluster:
+    Type: 'AWS::EMR::Cluster'
+    Properties:
+      Instances:
+        MasterInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnMaster
+        CoreInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnCore
+        Ec2SubnetId: !Ref VPCPublicSubnet
+        Ec2KeyName: !Ref EC2KeyPair
+        AdditionalMasterSecurityGroups:
+          - !Ref HTTPIngressSecurityGroup
+      Name: course-emr-cluster
+      BootstrapActions:
+        - Name: BootstrapNginx
+          ScriptBootstrapAction:
+            Path: s3://elasticmapreduce/bootstrap-actions/run-if
+            Args: 
+              - instance.isMaster=true
+              - /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      Applications:
+        - Name: Hadoop
+        - Name: Spark
+        - Name: Livy
+        - Name: Zeppelin
+        - Name: JupyterEnterpriseGateway
+      JobFlowRole: EMR_EC2_DefaultRole
+      ServiceRole: EMR_DefaultRole
+      ReleaseLabel: !Ref ReleaseLabel
+      VisibleToAllUsers: true
+      LogUri: 
+        Fn::Sub: 's3://aws-logs-${AWS::AccountId}-${AWS::Region}/elasticmapreduce/'
+
+  HTTPIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to client host
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+Outputs:
+  EMRMasterNodeDNS:
+    Description: EMR Cluster Master Node DNS
+    Value: !Sub http://${EMRCluster.MasterPublicDNS}
+
