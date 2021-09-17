@@ -14,7 +14,7 @@ echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
 sudo cat > ~/nginx.conf <<EOL
 user nginx;
 worker_processes auto;
-include /usr/share/nginx/modules/*.conf;
+# include /usr/share/nginx/modules/*.conf;
 events { }
 http {
 
