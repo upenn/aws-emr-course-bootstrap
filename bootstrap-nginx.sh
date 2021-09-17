@@ -14,15 +14,15 @@ echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
 sudo cat > ~/nginx.conf <<EOL
 user nginx;
 worker_processes auto;
-include /usr/share/nginx/modules/*.conf;
+#include /usr/share/nginx/modules/*.conf;
 events { }
 http {
 
     server {
-        listen 80
+        listen 80;
         auth_basic "";
         auth_basic_user_file /etc/nginx/.htpasswd;        
-        
+
         location / {
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Real-IP \$remote_addr;
