@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -xe
 
 
 sudo amazon-linux-extras install nginx1.12 -y

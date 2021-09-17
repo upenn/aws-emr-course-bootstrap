@@ -44,6 +44,23 @@ Parameters:
     - m5.xlarge
     - m6g.xlarge
     Description: Amazon EMR Cluster Instance Type
+
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+
+Rules:
+  SubnetsInVPC:
+    Assertions:
+      - Assert:
+          'Fn::Equals':
+            - 'Fn::ValueOf':
+                - 'VPCPublicSubnet'
+                - 'VpcId'
+            - !Ref VpcId
+        AssertDescription: All subnets must in the VPC
+
 Resources:
 
   EMRCluster:
@@ -71,7 +88,7 @@ Resources:
             Path: s3://elasticmapreduce/bootstrap-actions/run-if
             Args: 
               - instance.isMaster=true
-              - /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+              - /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh)"
       Applications:
         - Name: Hadoop
         - Name: Spark
@@ -83,22 +100,36 @@ Resources:
       ReleaseLabel: !Ref ReleaseLabel
       VisibleToAllUsers: true
       LogUri: 
-        Fn::Sub: 's3://aws-logs-${AWS::AccountId}-${AWS::Region}/elasticmapreduce/'
+        Fn::Sub: 's3://${EMRLogsBucket}/elasticmapreduce/'
+  EMRLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
 
   HTTPIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
         GroupDescription: Allow http to client host
+        VpcId: !Ref VpcId
         SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0          
         SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0          
 Outputs:
   EMRMasterNodeDNS:
     Description: EMR Cluster Master Node DNS
