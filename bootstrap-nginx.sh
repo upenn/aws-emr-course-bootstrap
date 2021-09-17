@@ -11,7 +11,7 @@ sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/certs/
 echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
 
 ## Modifying Nginx Server Configuration
-sudo cat > ~/nginx.conf <<EOL
+cat > /tmp/nginx.conf <<EOL
 user nginx;
 worker_processes auto;
 # include /usr/share/nginx/modules/*.conf;

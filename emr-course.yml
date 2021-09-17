@@ -1,5 +1,7 @@
 Description: >-
-  CloudFormation template to create Amazon EMR cluster 
+  CloudFormation template to create Amazon EMR cluster for student and coursework. The script can deploy a reverse proxy 
+  with basic authentication enabled on the master node to enforce authenticated access to Livy for remote spark sessions.
+  An additional bootstrap script can also be executed. 
 Metadata:
   'AWS::CloudFormation::Interface':
     ParameterGroups:
@@ -8,8 +10,12 @@ Metadata:
         Parameters:
           - ReleaseLabel
           - InstanceType
+          - VpcId
           - VPCPublicSubnet
           - EC2KeyPair
+          - BootstrapProxyScript
+          - BootstrapAdditionsScript
+
     ParameterLabels:
       ReleaseLabel:
         default: EMR Release Label
@@ -17,7 +23,10 @@ Metadata:
         default: VPC Public Subnet
       EC2KeyPair:
         default: EC2 Key Pair
-
+      BootstrapProxyScript:
+        default: Proxy Bootstrap Script
+      BootstrapAdditionsScript:
+        default: Additional Bootstrap Script
 
 Parameters:
   EC2KeyPair:
@@ -34,8 +43,7 @@ Parameters:
   VPCPublicSubnet:
     Type: 'AWS::EC2::Subnet::Id'
     Description: >-
-      Public Subnet to be used for Amazon EMR cluster, please choose either
-      LF-Workshop-PublicSubnetOne or LF-Workshop-PublicSubnetTwo
+      Public Subnet to be used for Amazon EMR cluster. 
     AllowedPattern: .+
   InstanceType:
     Type: String
@@ -44,11 +52,21 @@ Parameters:
     - m5.xlarge
     - m6g.xlarge
     Description: Amazon EMR Cluster Instance Type
+  
+  BootstrapProxyScript:
+    Type: String
+    Description: URL to the bootstrap script that will be used to install a proxy on the master node.
+    Default: https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh
+  
+  BootstrapAdditionsScript:
+    Type: String
+    Description: (Optional) URL to an additional bootstrap script that can be used for running commands on all nodes. 
+    Default: ''
 
   VpcId:
     Type: 'AWS::EC2::VPC::Id'
     Description: VpcId of your existing Virtual Private Cloud (VPC)
-    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+    ConstraintDescription: Must be the VPC Id of an existing Virtual Private Cloud.
 
 Rules:
   SubnetsInVPC:
@@ -60,7 +78,8 @@ Rules:
                 - 'VpcId'
             - !Ref VpcId
         AssertDescription: All subnets must in the VPC
-
+Conditions:
+  BootstrapAdditions: !Not [!Equals [!Ref BootstrapAdditionsScript, '']]
 Resources:
 
   EMRCluster:
@@ -88,7 +107,26 @@ Resources:
             Path: s3://elasticmapreduce/bootstrap-actions/run-if
             Args: 
               - instance.isMaster=true
-              - /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh)"
+              - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapProxyScript})"
+        - !If 
+            - BootstrapAdditions
+            - Name: BootstrapAdditions
+              ScriptBootstrapAction:
+                Path: s3://elasticmapreduce/bootstrap-actions/run-if
+                Args: 
+                  - instance.isMaster=true
+                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapAdditionsScript})" 
+            - !Ref AWS::NoValue           
+        - !If 
+            - BootstrapAdditions
+            - Name: BootstrapAdditions
+              ScriptBootstrapAction:
+                Path: s3://elasticmapreduce/bootstrap-actions/run-if
+                Args: 
+                  - instance.isMaster=false
+                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapAdditionsScript})" 
+            - !Ref AWS::NoValue
+           
       Applications:
         - Name: Hadoop
         - Name: Spark
