@@ -1,5 +1,5 @@
 #!/bin/bash -xe
-
+set -x
 
 sudo amazon-linux-extras install nginx1.12 -y
 sudo yum install openssl httpd-tools -y
@@ -68,6 +68,7 @@ http {
 EOL
 
 sudo cp ~/nginx.conf /etc/nginx/nginx.conf
+
 
 ## Starting Nginx Services
 sudo chkconfig nginx on
