@@ -102,12 +102,12 @@ Resources:
           - !Ref HTTPIngressSecurityGroup
       Name: course-emr-cluster
       BootstrapActions:
-        - Name: BootstrapNginx
-          ScriptBootstrapAction:
-            Path: s3://elasticmapreduce/bootstrap-actions/run-if
-            Args: 
-              - instance.isMaster=true
-              - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapProxyScript})"
+        # - Name: BootstrapNginx
+        #   ScriptBootstrapAction:
+        #     Path: s3://elasticmapreduce/bootstrap-actions/run-if
+        #     Args: 
+        #       - instance.isMaster=true
+        #       - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapProxyScript})"
         - !If 
             - BootstrapAdditions
             - Name: BootstrapAdditions
@@ -144,6 +144,19 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
+  EMRCopyNotebooksStep:
+    Type: 'AWS::EMR::Step'
+    Properties:
+      ActionOnFailure: CONTINUE
+      HadoopJarStep:
+        Args:
+          - bash
+          - -c
+          - !Sub "$(curl -fsSL ${BootstrapProxyScript})"
+        Jar: 'command-runner.jar'
+        MainClass: ''
+      Name: BootstrapLivyProxy
+      JobFlowId: !Ref EMRCluster
 
   HTTPIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
