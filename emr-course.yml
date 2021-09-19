@@ -101,16 +101,19 @@ Parameters:
     Type: String
     Description: 'URL to the bootstrap script that will be used to install a proxy on the master node. IMPORTANT: Make sure this is a URL and script you trust.'
     Default: https://raw.githubusercontent.com/<username>/<reponame>/master/bootstrap-nginx.sh
+    AllowedPattern: ^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$
+    ConstraintDescription: Please enter a valid http or https URL. Did you update the Default URL in the template?
   
   BootstrapMasterAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on master nodes. 
     Default: ''
-  
+
   BootstrapOtherAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on non-master nodes. 
     Default: ''    
+
 
 
 
