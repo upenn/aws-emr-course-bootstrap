@@ -14,8 +14,14 @@ Metadata:
           - VPCPublicSubnet
           - EC2KeyPair
           - BootstrapProxyScript
-          - BootstrapAdditionsScript
-
+          - BootstrapMasterAdditionsScript
+          - BootstrapOtherAdditionsScript
+      - Label:
+          default: Livy Proxy Credentials
+          Parameters:
+            - Username
+            - Password
+            - Password2
     ParameterLabels:
       ReleaseLabel:
         default: EMR Release Label
@@ -25,8 +31,10 @@ Metadata:
         default: EC2 Key Pair
       BootstrapProxyScript:
         default: Proxy Bootstrap Script
-      BootstrapAdditionsScript:
-        default: Additional Bootstrap Script
+      BootstrapMasterAdditionsScript:
+        default: Master Bootstrap Script
+      BootstrapOtherAdditionsScript:
+        default: Non-master Bootstrap Script        
 
 Parameters:
   EC2KeyPair:
@@ -52,16 +60,38 @@ Parameters:
     - m5.xlarge
     - m6g.xlarge
     Description: Amazon EMR Cluster Instance Type
+  Username:
+    Type: String
+    Default: 'livy'
+    ConstraintDescription: "Letters, numbers, dashes, and underscores only"
+    AllowedPattern: ^[a-zA-Z0-9_.-]*$
+  Password:
+    Type: String
+    NoEcho: True
+    Description: Enter a password
+    ConstraintDescription: "Letters, numbers, dashes, and underscores only"
+    AllowedPattern: ^[a-zA-Z0-9_.-]*$    
+  Password2:
+    Type: String
+    NoEcho: True
+    Description: Enter a password again
+
+  
   
   BootstrapProxyScript:
     Type: String
     Description: URL to the bootstrap script that will be used to install a proxy on the master node.
     Default: https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh
   
-  BootstrapAdditionsScript:
+  BootstrapMasterAdditionsScript:
     Type: String
-    Description: (Optional) URL to an additional bootstrap script that can be used for running commands on all nodes. 
+    Description: (Optional) URL to an additional bootstrap script that can be used for running commands on master nodes. 
     Default: ''
+  
+  BootstrapOtherAdditionsScript:
+    Type: String
+    Description: (Optional) URL to an additional bootstrap script that can be used for running commands on non-master nodes. 
+    Default: ''    
 
   VpcId:
     Type: 'AWS::EC2::VPC::Id'
@@ -78,9 +108,42 @@ Rules:
                 - 'VpcId'
             - !Ref VpcId
         AssertDescription: All subnets must in the VPC
+      - Assert:
+          'Fn::Equals':
+            - !Ref Password
+            - !Ref Password2
+        AssertDescription: Passwords must match.
+    
 Conditions:
-  BootstrapAdditions: !Not [!Equals [!Ref BootstrapAdditionsScript, '']]
+  BootstrapMasterAdditions: !Not [!Equals [!Ref BootstrapMasterAdditionsScript, '']]
+  BootstrapOtherAdditions: !Not [!Equals [!Ref BootstrapOtherAdditionsScript, '']]
+
+
+
 Resources:
+
+  LivyProxyCredentials:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub ${AWS::StackName}-LivyCredentials
+      Description: This secret has a hardcoded password in SecretString (use GenerateSecretString instead)
+      SecretString: !Sub '{"username":"${Username}","password":"${Password}"}'
+
+  LivyProxyCredentialsResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      BlockPublicPolicy: True
+      SecretId:
+        Ref: LivyProxyCredentials
+      ResourcePolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Resource: "*"
+          Action: secretsmanager:GetSecretValue
+          Effect: Allow
+          Principal:
+            AWS:
+              Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/EMR_EC2_DefaultRole
 
   EMRCluster:
     Type: 'AWS::EMR::Cluster'
@@ -102,29 +165,23 @@ Resources:
           - !Ref HTTPIngressSecurityGroup
       Name: course-emr-cluster
       BootstrapActions:
-        # - Name: BootstrapNginx
-        #   ScriptBootstrapAction:
-        #     Path: s3://elasticmapreduce/bootstrap-actions/run-if
-        #     Args: 
-        #       - instance.isMaster=true
-        #       - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapProxyScript})"
         - !If 
-            - BootstrapAdditions
-            - Name: BootstrapAdditions
+            - BootstrapMasterAdditions
+            - Name: BootstrapMasterAdditions
               ScriptBootstrapAction:
                 Path: s3://elasticmapreduce/bootstrap-actions/run-if
                 Args: 
                   - instance.isMaster=true
-                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapAdditionsScript})" 
+                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapMasterAdditionsScript})" 
             - !Ref AWS::NoValue           
         - !If 
-            - BootstrapAdditions
-            - Name: BootstrapAdditions
+            - BootstrapOtherAdditions
+            - Name: BootstrapOtherAdditions
               ScriptBootstrapAction:
                 Path: s3://elasticmapreduce/bootstrap-actions/run-if
                 Args: 
                   - instance.isMaster=false
-                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapAdditionsScript})" 
+                  - !Sub /bin/bash -c "$(curl -fsSL ${BootstrapOtherAdditionsScript})" 
             - !Ref AWS::NoValue
            
       Applications:
@@ -151,7 +208,8 @@ Resources:
       HadoopJarStep:
         Args:
           - "/bin/bash"
-          - !Sub '"-c \"$(curl -fsSL ${BootstrapProxyScript})\""'
+          - "-c"
+          - !Sub "curl -fsSL ${BootstrapProxyScript} | bash -s ${AWS::StackName}-LivyCredentials"
         Jar: 'command-runner.jar'
         MainClass: ''
       Name: BootstrapLivyProxy

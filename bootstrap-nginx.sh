@@ -2,9 +2,9 @@
 set -x
 
 sudo yum install httpd-tools -y
-
+echo $1
 # Generate a dummy password
-echo livy | sudo htpasswd -ci /etc/nginx/.htpasswd livy
+echo $(aws secretsmanager get-secret-value --secret-id $1 --query SecretString --output text | jq -r '."username"') | sudo htpasswd -ci /etc/nginx/.htpasswd "$(aws secretsmanager get-secret-value --secret-id $1 --query SecretString --output text | jq -r '."password"')"
 
 ## Modifying Nginx Server Configuration
 cat > /tmp/nginx.conf <<EOL
