@@ -150,9 +150,8 @@ Resources:
       ActionOnFailure: CONTINUE
       HadoopJarStep:
         Args:
-          - bash
-          - -c
-          - !Sub "$(curl -fsSL ${BootstrapProxyScript})"
+          - "/bin/bash"
+          - !Sub '"-c \"$(curl -fsSL ${BootstrapProxyScript})\""'
         Jar: 'command-runner.jar'
         MainClass: ''
       Name: BootstrapLivyProxy
