@@ -24,3 +24,4 @@ This Cloudformation and script can be used to deploy an Elastic Map Reduce (EMR)
     Note: If the request times out, wait up to 5 minutes and try again. The EMR Step that configures the proxy might not have executed yet.
 
 ## Troubleshooting
+- In the EMR Console (https://console.aws.amazon.com/elasticmapreduce), go to the cluster and select the **Steps** tab. Verify that the BootstrapLivyProxy step completed. If not, review the logs.
