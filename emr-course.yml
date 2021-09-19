@@ -24,7 +24,7 @@ Metadata:
           - LambdaHelperRole
       - Label:
           default: Livy Proxy Credentials
-          Parameters:
+        Parameters:
             - Username
             - Password
             - Password2
@@ -48,6 +48,8 @@ Parameters:
   EC2KeyPair:
     Description: Amazon EC2 Key Pair that can be used to SSH to the EMR cluster.
     Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: .+
+    ConstraintDescription: An EC2 Key Pair must be selected.
 
   ReleaseLabel:
     Type: String
@@ -56,10 +58,15 @@ Parameters:
     - "emr-6.2.0"
     - "emr-5.32.0"
     Description: The Amazon EMR version (release) to use.
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: You must select an existing VPC.
   VPCPublicSubnet:
     Type: 'AWS::EC2::Subnet::Id'
     Description: The public Subnet to be used for Amazon EMR cluster. This subnet must have a route to an Internet Gateway (IGW)
     AllowedPattern: .+
+    ConstraintDescription: An existing subnet must be selected
   InstanceType:
     Type: String
     Default: m5.xlarge
@@ -71,18 +78,20 @@ Parameters:
     Type: String
     Default: 'livy'
     Description: Enter a username to be used for the livy proxy. This username will be used when authenticating requests to Livy.
-    ConstraintDescription: "Letters, numbers, dashes, and underscores only"
-    AllowedPattern: ^[a-zA-Z0-9_.-]*$
+    ConstraintDescription: "Username cannot be empty and must use letters, numbers, dashes, and underscores only"
+    AllowedPattern: ^[a-zA-Z0-9_-]+$
   Password:
     Type: String
     NoEcho: True
     Description: Enter a password. Do not use a personal password. 
-    ConstraintDescription: "Letters, numbers, dashes, and underscores only"
-    AllowedPattern: ^[a-zA-Z0-9_.-]*$    
+    ConstraintDescription: "Password cannot be empty and must use letters, numbers, dashes, and underscores only"
+    AllowedPattern: ^[a-zA-Z0-9_-]+$
   Password2:
     Type: String
     NoEcho: True
     Description: Enter a password again
+    ConstraintDescription: "Password cannot be empty and must use letters, numbers, dashes, and underscores only"
+    
   LambdaHelperRole:
     Type: String
     Default: 'LabRole'
@@ -91,7 +100,7 @@ Parameters:
   BootstrapProxyScript:
     Type: String
     Description: 'URL to the bootstrap script that will be used to install a proxy on the master node. IMPORTANT: Make sure this is a URL and script you trust.'
-    Default: https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh
+    Default: https://raw.githubusercontent.com/<username>/<reponame>/master/bootstrap-nginx.sh
   
   BootstrapMasterAdditionsScript:
     Type: String
@@ -103,10 +112,7 @@ Parameters:
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on non-master nodes. 
     Default: ''    
 
-  VpcId:
-    Type: 'AWS::EC2::VPC::Id'
-    Description: VpcId of your existing Virtual Private Cloud (VPC)
-    ConstraintDescription: Must be the VPC Id of an existing Virtual Private Cloud.
+
 
 Rules:
   SubnetsInVPC:
