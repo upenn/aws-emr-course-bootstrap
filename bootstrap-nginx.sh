@@ -9,8 +9,6 @@ echo $(aws secretsmanager get-secret-value --secret-id $1 --query SecretString -
 set -x
 ## Modifying Nginx Server Configuration
 cat > /tmp/nginx.conf <<EOL
-
-
     server {
         listen 80;
         auth_basic "";

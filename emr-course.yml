@@ -1,7 +1,12 @@
 Description: >-
-  CloudFormation template to create Amazon EMR cluster for student and coursework. The script can deploy a reverse proxy 
+  CloudFormation template to create Amazon EMR cluster for student and coursework. The script can configure a reverse proxy 
   with basic authentication enabled on the master node to enforce authenticated access to Livy for remote spark sessions.
   An additional bootstrap script can also be executed. 
+
+  IMPORTANT: This template is NOT intended for production environments or for use with real world data. This template will modify the 
+  EMR Block Public Access Configuration to allow public access to port 80 and 443 of the master node. It will overwrite any existing 
+  configuration.
+
 Metadata:
   'AWS::CloudFormation::Interface':
     ParameterGroups:
@@ -16,6 +21,7 @@ Metadata:
           - BootstrapProxyScript
           - BootstrapMasterAdditionsScript
           - BootstrapOtherAdditionsScript
+          - LambdaHelperRole
       - Label:
           default: Livy Proxy Credentials
           Parameters:
@@ -34,11 +40,13 @@ Metadata:
       BootstrapMasterAdditionsScript:
         default: Master Bootstrap Script
       BootstrapOtherAdditionsScript:
-        default: Non-master Bootstrap Script        
+        default: Non-master Bootstrap Script   
+      LambdaHelperRole:
+        default: Lambda Helper Role Name     
 
 Parameters:
   EC2KeyPair:
-    Description: Amazon EC2 Key Pair
+    Description: Amazon EC2 Key Pair that can be used to SSH to the EMR cluster.
     Type: AWS::EC2::KeyPair::KeyName
 
   ReleaseLabel:
@@ -47,11 +55,10 @@ Parameters:
     AllowedValues:
     - "emr-6.2.0"
     - "emr-5.32.0"
-    Description: Amazon EMR Version
+    Description: The Amazon EMR version (release) to use.
   VPCPublicSubnet:
     Type: 'AWS::EC2::Subnet::Id'
-    Description: >-
-      Public Subnet to be used for Amazon EMR cluster. 
+    Description: The public Subnet to be used for Amazon EMR cluster. This subnet must have a route to an Internet Gateway (IGW)
     AllowedPattern: .+
   InstanceType:
     Type: String
@@ -59,28 +66,31 @@ Parameters:
     AllowedValues:
     - m5.xlarge
     - m6g.xlarge
-    Description: Amazon EMR Cluster Instance Type
+    Description: The instance type to use for the cluster. 
   Username:
     Type: String
     Default: 'livy'
+    Description: Enter a username to be used for the livy proxy. This username will be used when authenticating requests to Livy.
     ConstraintDescription: "Letters, numbers, dashes, and underscores only"
     AllowedPattern: ^[a-zA-Z0-9_.-]*$
   Password:
     Type: String
     NoEcho: True
-    Description: Enter a password
+    Description: Enter a password. Do not use a personal password. 
     ConstraintDescription: "Letters, numbers, dashes, and underscores only"
     AllowedPattern: ^[a-zA-Z0-9_.-]*$    
   Password2:
     Type: String
     NoEcho: True
     Description: Enter a password again
+  LambdaHelperRole:
+    Type: String
+    Default: 'LabRole'
+    Description: (Optional) The name of a role that will be used by a helper Lamdba to configure BlockPublicAccess settings. In AWS Academy Learner labs, a role named "LabRole" may be used.
 
-  
-  
   BootstrapProxyScript:
     Type: String
-    Description: URL to the bootstrap script that will be used to install a proxy on the master node.
+    Description: 'URL to the bootstrap script that will be used to install a proxy on the master node. IMPORTANT: Make sure this is a URL and script you trust.'
     Default: https://raw.githubusercontent.com/senorkrabs/aws-emr-course-bootstrap/master/bootstrap-nginx.sh
   
   BootstrapMasterAdditionsScript:
@@ -107,7 +117,7 @@ Rules:
                 - 'VPCPublicSubnet'
                 - 'VpcId'
             - !Ref VpcId
-        AssertDescription: All subnets must in the VPC
+        AssertDescription: All subnets must in the selected VPC. 
       - Assert:
           'Fn::Equals':
             - !Ref Password
@@ -117,18 +127,20 @@ Rules:
 Conditions:
   BootstrapMasterAdditions: !Not [!Equals [!Ref BootstrapMasterAdditionsScript, '']]
   BootstrapOtherAdditions: !Not [!Equals [!Ref BootstrapOtherAdditionsScript, '']]
+  LambdaHelperRoleNotSet: !Equals [!Ref LambdaHelperRole, '']
 
 
 
 Resources:
-
+  # The proxy credentials are securely stored in Secrets Manager to avoid logging or hardcoding them in plaintext.
   LivyProxyCredentials:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: !Sub ${AWS::StackName}-LivyCredentials
       Description: This secret has a hardcoded password in SecretString (use GenerateSecretString instead)
       SecretString: !Sub '{"username":"${Username}","password":"${Password}"}'
-
+  
+  # The EMR cluster's EC2 instance role needs permission to retrieve the encrypted secret
   LivyProxyCredentialsResourcePolicy:
     Type: AWS::SecretsManager::ResourcePolicy
     Properties:
@@ -145,8 +157,11 @@ Resources:
             AWS:
               Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/EMR_EC2_DefaultRole
 
+  # The EMR cluster uses the built-in/default EMR roles. Bootstrap scripts can be retrieved from any public HTTP URL. 
   EMRCluster:
     Type: 'AWS::EMR::Cluster'
+    DependsOn:
+      - EMRConfigureBlockPublicAccess
     Properties:
       Instances:
         MasterInstanceGroup:
@@ -196,11 +211,16 @@ Resources:
       VisibleToAllUsers: true
       LogUri: 
         Fn::Sub: 's3://${EMRLogsBucket}/elasticmapreduce/'
+
+  # S3 Bucket where EMR logs will be stored. Note that this bucket will need to be cleaned up manually if the stack is deleted.      
   EMRLogsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
+  # EMR Step that executes Proxy configuration. This must be run as a step instead of a bootstrap because EMR installs and configures Nginx
+  # after bootstrapping. Therefore, we need to modify the configuration after the initial EMR cluster launch to avoid our configuration being
+  # overwritten.
   EMRCopyNotebooksStep:
     Type: 'AWS::EMR::Step'
     Properties:
@@ -215,6 +235,129 @@ Resources:
       Name: BootstrapLivyProxy
       JobFlowId: !Ref EMRCluster
 
+  # Optional IAM Role for the Lambda function that modifies the EMR Block Public Access configuration. In AWS Academy, new roles
+  # can't be created by the lab user and so an existing role (LabRole) is used instead. In other environments, this role may not be available
+  # and so this role needs to be created and used.
+  LambdaEMRBPARole:
+    Condition: LambdaHelperRoleNotSet
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role-lambda-emr-bpa'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Sid: LambdaAccess
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: 'policy-emr-bpa'
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+              - elasticmapreduce:PutBlockPublicAccessConfiguration 
+            Resource: '*'    
+  # CloudFormation CustomResource that invokes the Lambda to configure EMR Block Public Access
+  EMRConfigureBlockPublicAccess:
+    Type: Custom::EMRConfigureBlockPublicAccess
+    Properties:
+      ServiceToken: !GetAtt EMRBlockPublicAccessConfigurationFunction.Arn
+      Region: !Ref AWS::Region
+  
+  # Custom Resource Lambda that will configure EMR Block Public Access (BPA). The Lambda enables EMR BPA and
+  # adds exceptions for ports 22, 80, and 443. If this is not configured, the EMR cluster fails to deploy
+  # because one of the security groups attached allows access to 80 and 443 from 0.0.0.0/0
+  EMRBlockPublicAccessConfigurationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-customresource-emr-bpa-configuration'
+      Runtime: python3.7
+      Handler: index.handler
+      Description: Enables Default EBS Encryption
+      MemorySize: 512
+      Role: !If [LambdaHelperRoleNotSet, !GetAtt LambdaEMRBPARole.Arn, !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaHelperRole}"]
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import logging
+          import boto3
+          import urllib3
+          import uuid
+          from botocore.exceptions import ClientError
+          import cfnresponse
+
+          logger = logging.getLogger(__name__)
+          logger.setLevel(logging.DEBUG)
+
+          try:
+              emr_client = boto3.client('emr')
+              pass
+          except Exception as e:
+              logger.error('Unable to create EMR client: {}'.format(str(e)))
+
+          def create():
+              logger.info("Got Create")   
+              try:
+                  enable_publicports = emr_client.put_block_public_access_configuration(
+                    BlockPublicAccessConfiguration={
+                      'BlockPublicSecurityGroupRules': True,
+                      'PermittedPublicSecurityGroupRuleRanges': [
+                        {
+                          'MinRange': 22,
+                          'MaxRange': 22
+                        },
+                        {
+                          'MinRange': 80,
+                          'MaxRange': 80
+                        },           
+                        {
+                          'MinRange': 443,
+                          'MaxRange': 443
+                        },         
+                      ]
+                    }
+                  )
+                  logger.info("Block Public Access for EMR Configured")
+              except ClientError as e:
+                  print ("Error enabling default  block public access on EMR in account due to the following error {}".format(e))
+                  raise e
+              return cfnresponse.SUCCESS, {}, uuid.uuid4().hex
+          def update():
+              logger.info("Got Update")
+              response = create()
+              return response
+          def delete():
+              logger.info("Got Delete")
+              return cfnresponse.SUCCESS, {}
+
+          def handler(event, context):
+              logger.debug(event)
+              physical_id = None
+              if emr_client == None:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Reason': 'Unable to create EMR Client.'})
+              try:
+                  if event['RequestType'] == 'Create':
+                      response, data, physical_id = create()
+                  elif event['RequestType'] == 'Update':
+                      response, data, physical_id = update()
+                  elif event['RequestType'] == 'Delete':
+                      response, data = delete()
+                  else:
+                      logger.error('Unknown operation: {}'.format(event['RequestType']))
+                      raise ValueError ('Unknown Operation.')
+                  cfnresponse.send(event, context, response, data, physical_id)
+              except Exception as e:
+                  logger.error('Exception: {}'.format(str(e)))
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Reason': str(e)}, physical_id)
+                  raise
+
+  # Security group that allows access to ports 80 and 443 from 0.0.0.0/0. These are the ports that the  Livy Proxy listens on.
   HTTPIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
