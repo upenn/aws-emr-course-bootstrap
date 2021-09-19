@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -x
 
 sudo yum install httpd-tools -y
@@ -61,6 +60,6 @@ EOL
 sudo cp /tmp/nginx.conf /etc/nginx/conf.d/livyproxy.conf
 
 #Add an include to the http directive
-sed -i 's/http {/http { \n    #CUSTOM INCLUDES \n    include \/etc\/nginx\/conf.d\/*.conf;\n    #END CUSTOM INCLUDES/' nginx.conf
+sed -i 's/http {/http { \n    #CUSTOM INCLUDES \n    include \/etc\/nginx\/conf.d\/*.conf;\n    #END CUSTOM INCLUDES/' /etc/nginx/nginx.conf
 
 sudo service nginx restart
