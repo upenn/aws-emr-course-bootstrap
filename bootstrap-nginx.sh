@@ -4,8 +4,9 @@ set -x
 sudo yum install httpd-tools -y
 echo $1
 # Generate a dummy password
+set +x
 echo $(aws secretsmanager get-secret-value --secret-id $1 --query SecretString --output text | jq -r '."username"') | sudo htpasswd -ci /etc/nginx/.htpasswd "$(aws secretsmanager get-secret-value --secret-id $1 --query SecretString --output text | jq -r '."password"')"
-
+set -x
 ## Modifying Nginx Server Configuration
 cat > /tmp/nginx.conf <<EOL
 
