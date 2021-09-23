@@ -36,7 +36,7 @@ Metadata:
       EC2KeyPair:
         default: EC2 Key Pair
       BootstrapProxyScript:
-        default: Proxy Bootstrap Script
+        default: s3://penn-cis545-files/update.sh
       BootstrapMasterAdditionsScript:
         default: Master Bootstrap Script
       BootstrapOtherAdditionsScript:
