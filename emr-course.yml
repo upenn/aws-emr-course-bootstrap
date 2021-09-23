@@ -76,7 +76,7 @@ Parameters:
     Description: The instance type to use for the cluster. 
   Username:
     Type: String
-    Default: 'livy'
+    Default: 'cis545-livy'
     Description: Enter a username to be used for the livy proxy. This username will be used when authenticating requests to Livy.
     ConstraintDescription: "Username cannot be empty and must use letters, numbers, dashes, and underscores only"
     AllowedPattern: ^[a-zA-Z0-9_-]+$
@@ -100,7 +100,7 @@ Parameters:
   BootstrapProxyScript:
     Type: String
     Description: 'URL to the bootstrap script that will be used to install a proxy on the master node. IMPORTANT: Make sure this is a URL and script you trust.'
-    Default: https://raw.githubusercontent.com/<username>/<reponame>/master/bootstrap-nginx.sh
+    Default: https://raw.githubusercontent.com/upenn/aws-emr-course-bootstrap/master/bootstrap-nginx.sh
   
   BootstrapMasterAdditionsScript:
     Type: String
