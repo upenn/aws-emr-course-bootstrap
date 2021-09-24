@@ -36,17 +36,18 @@ Metadata:
       EC2KeyPair:
         default: EC2 Key Pair
       BootstrapProxyScript:
-        default: s3://penn-cis545-files/update.sh
+        default: Proxy Bootstrap Script
       BootstrapMasterAdditionsScript:
         default: Master Bootstrap Script
       BootstrapOtherAdditionsScript:
-        default: Non-master Bootstrap Script   
+        default: Non-master Bootstrap Script
       LambdaHelperRole:
         default: Lambda Helper Role Name     
 
 Parameters:
   EC2KeyPair:
     Description: Amazon EC2 Key Pair that can be used to SSH to the EMR cluster.
+    Default: "vockey"
     Type: AWS::EC2::KeyPair::KeyName
     AllowedPattern: .+
     ConstraintDescription: An EC2 Key Pair must be selected.
@@ -105,12 +106,12 @@ Parameters:
   BootstrapMasterAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on master nodes. 
-    Default: ''
+    Default: 's3://penn-cis545-files.s3.amazonaws.com/update.sh'
 
   BootstrapOtherAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on non-master nodes. 
-    Default: ''    
+    Default: 's3://penn-cis545-files.s3.amazonaws.com/update.sh'    
 
 
 
