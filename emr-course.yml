@@ -54,9 +54,9 @@ Parameters:
 
   ReleaseLabel:
     Type: String
-    Default: "emr-6.2.0"
+    Default: "emr-6.2.1"
     AllowedValues:
-    - "emr-6.2.0"
+    - "emr-6.2.1"
     - "emr-5.32.0"
     Description: The Amazon EMR version (release) to use.
   VpcId:
@@ -106,12 +106,12 @@ Parameters:
   BootstrapMasterAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on master nodes. 
-    Default: 's3://penn-cis545-files.s3.amazonaws.com/update.sh'
+    Default: 'https://penn-cis545-files.s3.amazonaws.com/update.sh'
 
   BootstrapOtherAdditionsScript:
     Type: String
     Description: (Optional) URL to an additional bootstrap script that can be used for running commands on non-master nodes. 
-    Default: 's3://penn-cis545-files.s3.amazonaws.com/update.sh'    
+    Default: 'https://penn-cis545-files.s3.amazonaws.com/update.sh'    
 
 
 
